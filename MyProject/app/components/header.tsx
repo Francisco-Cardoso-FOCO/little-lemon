@@ -1,6 +1,7 @@
 import { StyleSheet, View, Pressable, Text } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Image } from "expo-image";
+import { Ionicons } from "@expo/vector-icons";
 import {
   useNavigation,
   useRoute,
@@ -22,6 +23,13 @@ export function Header() {
 
   // Check if we're on the Onboarding screen
   const isOnboardingScreen = route.name === "Onboarding";
+  const isProfileScreen = route.name === "Profile";
+
+  const handleAvatarPress = () => {
+    if (!isProfileScreen) {
+      navigation.navigate("Profile" as never);
+    }
+  };
 
   const loadUserData = useCallback(async () => {
     try {
@@ -79,7 +87,16 @@ export function Header() {
   return (
     <SafeAreaView style={styles.headerContainer} edges={["top"]}>
       <View style={styles.headerContent}>
-        <View style={styles.backButtonPlaceholder} />
+        {isProfileScreen ? (
+          <Pressable
+            style={styles.backButton}
+            onPress={() => navigation.goBack()}
+          >
+            <Ionicons name="chevron-back" size={24} color="white" />
+          </Pressable>
+        ) : (
+          <View style={styles.backButtonPlaceholder} />
+        )}
 
         <View style={styles.logoContainer}>
           <Image
@@ -90,7 +107,11 @@ export function Header() {
         </View>
 
         {!isOnboardingScreen && (
-          <View style={styles.avatarContainer}>
+          <Pressable
+            style={styles.avatarContainer}
+            onPress={handleAvatarPress}
+            disabled={isProfileScreen}
+          >
             {avatarUri ? (
               <Image
                 source={{ uri: avatarUri }}
@@ -102,7 +123,7 @@ export function Header() {
                 <Text style={styles.avatarInitials}>{getInitials()}</Text>
               </View>
             )}
-          </View>
+          </Pressable>
         )}
         {isOnboardingScreen && <View style={styles.backButtonPlaceholder} />}
       </View>
@@ -130,11 +151,6 @@ const styles = StyleSheet.create({
     backgroundColor: "#333",
     alignItems: "center",
     justifyContent: "center",
-  },
-  backButtonText: {
-    color: "white",
-    fontSize: 20,
-    fontWeight: "bold",
   },
   backButtonPlaceholder: {
     width: 40,

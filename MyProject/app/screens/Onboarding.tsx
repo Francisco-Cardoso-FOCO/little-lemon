@@ -39,8 +39,8 @@ export default function Onboarding() {
       // Save user first name and email
       await AsyncStorage.setItem(USER_FIRST_NAME_KEY, name.trim());
       await AsyncStorage.setItem(USER_EMAIL_KEY, email.trim());
-      // Navigate to Profile screen
-      navigation.navigate("Profile" as never);
+      // Navigate to Home screen
+      navigation.navigate("Home" as never);
     } catch (error) {
       console.error("Error saving onboarding status:", error);
       Alert.alert(

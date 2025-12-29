@@ -55,20 +55,19 @@ export default function InicialStack({}: InicialStackProps) {
   }, [checkOnboardingStatus]);
 
   if (state.isLoading) {
-    // We haven't finished reading from AsyncStorage yet
     return <SplashScreen />;
   }
 
   return (
     <Stack.Navigator
-      initialRouteName={state.isOnboardingCompleted ? "Profile" : "Onboarding"}
+      initialRouteName={state.isOnboardingCompleted ? "Home" : "Onboarding"}
       screenOptions={{
         header: () => <Header />,
       }}
     >
       <Stack.Screen name="Onboarding" component={OnboardingScreen} />
-      <Stack.Screen name="Profile" component={ProfileScreen} />
       <Stack.Screen name="Home" component={HomeScreen} />
+      <Stack.Screen name="Profile" component={ProfileScreen} />
     </Stack.Navigator>
   );
 }
