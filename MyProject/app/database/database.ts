@@ -11,23 +11,25 @@ export interface MenuItem {
 const DATABASE_NAME = "little_lemon";
 
 // Open database connection
-export const openDatabase = async (): Promise<SQLite.SQLiteDatabase> => {
+export const openDatabase = async (): Promise<SQLite.SQLiteDatabase | null> => {
   try {
     const db = await SQLite.openDatabaseAsync(DATABASE_NAME);
     if (!db) {
-      throw new Error("Failed to open database connection");
+      console.error("Database connection is null");
+      return null;
     }
     return db;
   } catch (error) {
     console.error("Error opening database:", error);
-    throw error;
+    return null;
   }
 };
 
 // Create menu table if it doesn't exist
-export const createMenuTable = async (db: SQLite.SQLiteDatabase) => {
+export const createMenuTable = async (db: SQLite.SQLiteDatabase | null): Promise<boolean> => {
   if (!db) {
-    throw new Error("Database connection is null in createMenuTable");
+    console.error("Database connection is null in createMenuTable");
+    return false;
   }
   
   try {
@@ -41,9 +43,10 @@ export const createMenuTable = async (db: SQLite.SQLiteDatabase) => {
         category TEXT NOT NULL
       );
     `);
+    return true;
   } catch (error) {
     console.error("Error creating menu table:", error);
-    throw error;
+    return false;
   }
 };
 
@@ -162,14 +165,33 @@ export const saveMenuItems = async (
   db: SQLite.SQLiteDatabase,
   menuItems: MenuItem[]
 ): Promise<void> => {
-  await db.withTransactionAsync(async () => {
-    for (const item of menuItems) {
-      await db.runAsync(
-        "INSERT INTO menu (name, price, description, image, category) VALUES (?, ?, ?, ?, ?)",
-        [item.name, item.price, item.description, item.image, item.category]
-      );
-    }
-  });
+  if (!db) {
+    throw new Error("Database connection is null in saveMenuItems");
+  }
+  
+  if (!menuItems || menuItems.length === 0) {
+    console.warn("No menu items to save");
+    return;
+  }
+  
+  try {
+    // First, clear existing data to avoid duplicates
+    await db.runAsync("DELETE FROM menu");
+    
+    // Then insert all items in a transaction
+    await db.withTransactionAsync(async () => {
+      for (const item of menuItems) {
+        await db.runAsync(
+          "INSERT INTO menu (name, price, description, image, category) VALUES (?, ?, ?, ?, ?)",
+          [item.name, item.price, item.description, item.image, item.category]
+        );
+      }
+    });
+    
+  } catch (error) {
+    console.error("Error saving menu items:", error);
+    throw error;
+  }
 };
 
 // Check if menu table has data
@@ -182,12 +204,16 @@ export const hasMenuData = async (
   }
   
   try {
-    const result = await db.getFirstAsync<{ count: number }>(
-      "SELECT COUNT(*) as count FROM menu"
+    // Try to get a single row instead of counting (lighter query)
+    // This will return null if table is empty or doesn't exist
+    const result = await db.getFirstAsync<MenuItem>(
+      "SELECT name, price, description, image, category FROM menu LIMIT 1"
     );
-    return (result?.count ?? 0) > 0;
+    return result !== null;
   } catch (error) {
-    console.error("Error checking menu data:", error);
+    // If query fails (table doesn't exist or other error), return false
+    // This is expected on first run when table doesn't exist yet
+    console.warn("Menu table may not exist yet or query failed:", error);
     return false;
   }
 };

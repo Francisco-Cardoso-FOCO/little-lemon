@@ -63,11 +63,21 @@ function HomeScreen() {
         setError(null);
 
         const db = await openDatabase();
+        
         if (!db) {
           throw new Error("Failed to open database connection");
         }
+        
+        // Verify db is not null before proceeding
+        if (db === null) {
+          throw new Error("Database connection is null");
+        }
 
-        await createMenuTable(db);
+        // Create table
+        const tableCreated = await createMenuTable(db);
+        if (!tableCreated) {
+          console.warn("Table creation returned false, but continuing...");
+        }
 
         // Check if data exists in database
         const hasData = await hasMenuData(db);
@@ -91,12 +101,39 @@ function HomeScreen() {
           const data: MenuData = await response.json();
           const menuItems = data.menu || [];
 
-          // Save menu items to database
-          await saveMenuItems(db, menuItems);
+          if (menuItems.length === 0) {
+            throw new Error("No menu items received from API");
+          }
 
+          // Save menu items to database (table should already exist from earlier)
+          try {
+            await saveMenuItems(db, menuItems);
+          } catch (saveError) {
+            console.error("Error saving menu items:", saveError);
+            // Try to ensure table exists and save again
+            const tableExists = await createMenuTable(db);
+            if (tableExists) {
+              try {
+                await saveMenuItems(db, menuItems);
+              } catch (retryError) {
+                console.error("Error saving menu items after retry:", retryError);
+                // Continue anyway - we can still display the data from API
+              }
+            } else {
+              console.error("Could not create table, skipping database save");
+            }
+          }
+
+          // Get categories from saved data
           const uniqueCategories = await getCategories(db);
+          
+          // If categories are empty, extract from menuItems
+          const finalCategories = uniqueCategories.length > 0 
+            ? uniqueCategories 
+            : Array.from(new Set(menuItems.map(item => item.category)));
+
           setMenuData(menuItems);
-          setCategories(uniqueCategories);
+          setCategories(finalCategories);
           setIsDatabaseReady(true);
           setLoading(false);
         }
@@ -138,6 +175,29 @@ function HomeScreen() {
     }
   }, [menuData]);
 
+  // In-memory filtering function as fallback when database fails
+  const filterMenuItemsInMemory = useCallback(
+    (items: MenuItem[], searchText: string, selectedCats: string[]): MenuItem[] => {
+      let filtered = [...items];
+
+      // Filter by search text
+      if (searchText.trim().length > 0) {
+        const searchLower = searchText.trim().toLowerCase();
+        filtered = filtered.filter((item) =>
+          item.name.toLowerCase().includes(searchLower)
+        );
+      }
+
+      // Filter by categories
+      if (selectedCats.length > 0) {
+        filtered = filtered.filter((item) => selectedCats.includes(item.category));
+      }
+
+      return filtered;
+    },
+    []
+  );
+
   // Filter menu items based on search query and selected categories using SQL query
   useEffect(() => {
     let isMounted = true;
@@ -148,38 +208,45 @@ function HomeScreen() {
         return;
       }
 
+      const selectedCategoriesArray = Array.from(selectedCategories);
+      
+      // If no filters are applied, show all initial data
+      if (debouncedSearchQuery.trim() === "" && selectedCategoriesArray.length === 0) {
+        if (isMounted && initialMenuDataRef.current.length > 0) {
+          setMenuData(initialMenuDataRef.current);
+        }
+        return;
+      }
+
+      // Try database filtering first
       try {
-        // Verify database has data before querying
         const db = await openDatabase();
-        if (!db || !isMounted) {
-          return;
-        }
+        
+        if (db && db !== null) {
+          const filteredItems = await getMenuItemsBySearchAndCategories(
+            db,
+            debouncedSearchQuery,
+            selectedCategoriesArray
+          );
 
-        const hasData = await hasMenuData(db);
-        if (!hasData) {
-          console.warn("Database has no data, skipping filter");
-          return;
+          // Only update if component is still mounted and we got valid results
+          if (isMounted && Array.isArray(filteredItems)) {
+            setMenuData(filteredItems);
+            return;
+          }
         }
+      } catch (err) {
+        console.warn("Database filtering failed, falling back to in-memory filtering:", err);
+      }
 
-        const selectedCategoriesArray = Array.from(selectedCategories);
-        const filteredItems = await getMenuItemsBySearchAndCategories(
-          db,
+      // Fall back to in-memory filtering if database fails
+      if (isMounted && initialMenuDataRef.current.length > 0) {
+        const filteredItems = filterMenuItemsInMemory(
+          initialMenuDataRef.current,
           debouncedSearchQuery,
           selectedCategoriesArray
         );
-
-        // Only update if component is still mounted and we got valid results
-        if (isMounted && Array.isArray(filteredItems)) {
-          setMenuData(filteredItems);
-        }
-      } catch (err) {
-        if (isMounted) {
-          console.error("Error filtering menu items:", err);
-          // Fall back to initial data if available
-          if (initialMenuDataRef.current.length > 0) {
-            setMenuData(initialMenuDataRef.current);
-          }
-        }
+        setMenuData(filteredItems);
       }
     };
 
@@ -188,7 +255,7 @@ function HomeScreen() {
     return () => {
       isMounted = false;
     };
-  }, [debouncedSearchQuery, selectedCategories, isDatabaseReady, loading]);
+  }, [debouncedSearchQuery, selectedCategories, isDatabaseReady, loading, filterMenuItemsInMemory]);
 
   const toggleCategory = useCallback((category: string) => {
     setSelectedCategories((prev) => {
