@@ -11,6 +11,8 @@ import { useNavigation } from "@react-navigation/native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 export const ONBOARDING_KEY = "@onboarding_completed";
+export const USER_FIRST_NAME_KEY = "@user_first_name";
+export const USER_EMAIL_KEY = "@user_email";
 
 // Email validation regex
 const isValidEmail = (email: string) => {
@@ -34,6 +36,9 @@ export default function Onboarding() {
     try {
       // Save onboarding completion status
       await AsyncStorage.setItem(ONBOARDING_KEY, "true");
+      // Save user first name and email
+      await AsyncStorage.setItem(USER_FIRST_NAME_KEY, name.trim());
+      await AsyncStorage.setItem(USER_EMAIL_KEY, email.trim());
       // Navigate to Profile screen
       navigation.navigate("Profile" as never);
     } catch (error) {

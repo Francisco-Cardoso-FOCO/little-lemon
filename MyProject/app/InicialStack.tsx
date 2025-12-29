@@ -61,17 +61,13 @@ export default function InicialStack({}: InicialStackProps) {
 
   return (
     <Stack.Navigator
+      initialRouteName={state.isOnboardingCompleted ? "Profile" : "Onboarding"}
       screenOptions={{
         header: () => <Header />,
       }}
     >
-      {state.isOnboardingCompleted ? (
-        // Onboarding completed, user is signed in
-        <Stack.Screen name="Profile" component={ProfileScreen} />
-      ) : (
-        // User is NOT signed in
-        <Stack.Screen name="Onboarding" component={OnboardingScreen} />
-      )}
+      <Stack.Screen name="Onboarding" component={OnboardingScreen} />
+      <Stack.Screen name="Profile" component={ProfileScreen} />
       <Stack.Screen name="Home" component={HomeScreen} />
     </Stack.Navigator>
   );
